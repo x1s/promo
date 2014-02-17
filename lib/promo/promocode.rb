@@ -1,5 +1,6 @@
 module Promo
   class Promocode < ActiveRecord::Base
+    self.table_name = 'promo_promocodes'
     # Forbide direct creation of objects
     private_class_method :new, :create
 
@@ -118,7 +119,7 @@ module Promo
       end
 
       # Validates if the code is already created, then add something to the name
-      codebd = Promocode.find_by code: code
+      codebd = Promo::Promocode.find_by code: code
       if !codebd.nil?
         code = code+SecureRandom.hex(1)
       end

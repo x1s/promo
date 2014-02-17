@@ -18,13 +18,15 @@ Or install it yourself as:
 
 ## Usage
 
-    # gem install promo
+First you need to create the migrations needed in the gem:
+
+    # rails generate promo:install
 
 Objects must always be created through generate method instead using new.
 Here you may define some options:
 
 ```ruby
-promo = Promo.generate(options)
+promo = Promo::Promocode.generate(options)
 
 options.multiple: false
 options.quantity: 1
@@ -53,8 +55,8 @@ gem 'sinatra', '>= 1.3.0', :require => nil
 Add the following to your config/routes.rb:
 
 ```ruby
-require 'sidekiq/web'
-mount Sidekiq::Web => '/sidekiq'
+require 'promo/web'
+mount Promo::Web => '/promo'
 ```
 
 ## Contributing
