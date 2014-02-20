@@ -37,13 +37,67 @@ options.code: SecureRandom.hex(4)
 options.product: Some model with has_many :promocodes, as: :product
 ```
 
+### Associated models
+
+#### Cart / Order
+While in a ecommerce, you might have a Cart and Order models (or any correspondency). thus you must associate these models in order to accept the promocodes associated.
+
+In a simple example, we might define a Cart model as:
+```ruby
+class Cart < ActiveRecord::Base
+  has_many :cart_items, dependent: :destroy
+  has_one :promo_history, :class_name => 'Promo::History'
+  has_one :promocode, through: :promo_history
+  ...
+end
+
+```
+
+And then, after the checkout that Cart model suppose to be transformed (or coppied) to a Order object, something like:
+
+```ruby
+class Order < ActiveRecord::Base
+  has_many :order_items, dependent: :destroy
+  has_one :promo_history, :class_name => 'Promo::History'
+  has_one :promocode, through: :promo_history
+  ...
+end
+
+```
+
+#### Products
+
+As a promocode may be associated with any kind of product, in the model you want allow it, you must define as
+
+```ruby
+class Product < ActiveRecord::Base
+  has_many :promocodes, as: :product
+
+  has_many :cart_item, as: :product
+  has_many :order_item, as: :product
+  
+  has_many :carts, through: :cart_item
+  has_many :orders, through: :order_item
+  ...
+end
+```
+
 ### Then you can calculate the discount by
 
 ```ruby
-promo.apply_cart(group_of_products)
-promo.calculate_discount(value, [product, group_of_products])
-promo.use(options)
+class Cart < ActiveRecord::Base
+  def recalculate
+    self.update_attribute(:total_value, cart_items.map{ |i| i.product.value }.reduce(:+))
+    self.update_attribute(:discount_value, Promo::Usage.discount_for(promocode: self.promocode, product_list: product_list))
+    self.update_attribute(:final_value, self.total_value-self.discount_value)
+  end
+end
 ```
+
+### Example application
+I've created a sample application with a basic product/cart/order model to test the gem, and also might be used as base for any simple ecommerce:
+
+http://github.com/x1s/promo-example-cart
 
 ### Administration view
 

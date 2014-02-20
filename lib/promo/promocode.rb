@@ -2,12 +2,13 @@ module Promo
   class Promocode < ActiveRecord::Base
     self.table_name = 'promo_promocodes'
     # Forbide direct creation of objects
-    private_class_method :new, :create
+    private_class_method :create
 
     belongs_to :product, polymorphic: true
-    has_many :promocode_histories
-    has_many :carts, through: :promocode_histories
-    has_many :orders, through: :promocode_histories
+
+    has_many :histories, :class_name => 'Promo::History', :foreign_key => "promo_promocode_id"
+    has_many :carts, through: :histories
+    has_many :orders, through: :histories
 
     validates :code, uniqueness: true
 
@@ -18,55 +19,6 @@ module Promo
     scope :used, -> { where(status: STATUS[:used]).order(used_at: :desc) }
     scope :invalid, -> { where(status: STATUS[:invalid]).order(used_at: :desc) }
     scope :expired, -> { where("status = ? OR expires < ?", STATUS[:expired], Time.now).order(expires: :desc) }
-
-    def is_expired?
-      return true if self.status == STATUS[:expired]
-      return false if self.expires > Time.now
-      update_attribute(:status, STATUS[:expired])
-      true
-    end
-
-    def invalidate!
-      update_attributes(status: STATUS[:invalid], used_at: Time.now)
-    end
-
-    def is_valid?(options={})
-      raise UsedPromocode.new 'promocode.messages.already_used' if self.status == STATUS[:used]
-      raise InvalidPromocode.new 'promocode.messages.invalid' if self.status != STATUS[:valid]
-      raise ExpiredPromocode.new 'promocode.messages.expired' if is_expired?
-
-      # Validating use with product associated
-      if !self.product.nil?
-        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:cart].nil?
-        if self.product && !options[:cart].has_product?(self.product)
-          raise InvalidPromoProduct.new 'promocode.messages.not_valid_for'
-        end
-      end
-      # Validating use with product associated
-      if self.product_id.nil? && !self.product_type.nil?
-        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:cart].nil?
-        if self.product_type == 'Course' && !options[:cart].get_first_course
-          raise InvalidPromoProduct.new 'promocode.messages.must_have_course'
-        end
-        if self.product_type == 'CourseModule' && !options[:cart].get_first_module
-          raise InvalidPromoProduct.new 'promocode.messages.must_have_module'
-        end
-      end
-      # Validates use of this promocode
-      true
-    end
-
-    def has_product?
-      !self.product.nil?
-    end
-
-    def is_percentage?
-      self.promo_type == TYPE[:percentage]
-    end
-
-    def is_fixed_value?
-      self.promo_type == TYPE[:fixed_value]
-    end
 
     # Objects must always be created through generate method instead using new.
     # here you may define some options:
@@ -111,19 +63,76 @@ module Promo
       create!(options)
     end
 
-    def self.generate_code(size=4,code="")
-      if code.empty?
-        code = SecureRandom.hex(size)
-      else
-        code = code+SecureRandom.hex(size)
-      end
+    #--------------------------
 
+    def use (options={})
+      is_valid? options
+
+      self.used += 1
+      self.status = STATUS[:used] if self.quantity == self.used
+      self.used_at = Time.now
+      save
+      self
+    end
+
+    def invalidate!
+      update_attributes(status: STATUS[:invalid], used_at: Time.now)
+    end
+
+    #--------------------------
+
+    def has_product?
+      !self.product.nil?
+    end
+
+    def is_percentage?
+      self.promo_type == TYPE[:percentage]
+    end
+
+    def is_fixed_value?
+      self.promo_type == TYPE[:fixed_value]
+    end
+
+    def is_expired?
+      return true if self.status == STATUS[:expired]
+      return false if self.expires > Time.now
+      update_attribute(:status, STATUS[:expired])
+      true
+    end
+
+    def is_valid?(options={})
+      raise UsedPromocode.new 'promocode.messages.already_used' if self.status == STATUS[:used]
+      raise InvalidPromocode.new 'promocode.messages.invalid' if self.status != STATUS[:valid]
+      raise ExpiredPromocode.new 'promocode.messages.expired' if is_expired?
+
+      # Validating use with product associated
+      if !self.product.nil?
+        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:cart].nil?
+        if self.product && !options[:cart].has_product?(self.product)
+          raise InvalidPromoProduct.new 'promocode.messages.not_valid_for'
+        end
+      end
+      # Validating use with product associated
+      if self.product_id.nil? && !self.product_type.nil?
+        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:cart].nil?
+        if self.product_type == 'Course' && !options[:cart].get_first_course
+          raise InvalidPromoProduct.new 'promocode.messages.must_have_course'
+        end
+        if self.product_type == 'CourseModule' && !options[:cart].get_first_module
+          raise InvalidPromoProduct.new 'promocode.messages.must_have_module'
+        end
+      end
+      # Returns the promocode if it's valid
+      self
+    end
+
+    def self.generate_code(size=4,code="")
+      code = SecureRandom.hex(size) if code.empty?
+      code = code+SecureRandom.hex(size) unless code.empty?
       # Validates if the code is already created, then add something to the name
-      codebd = Promo::Promocode.find_by code: code
-      if !codebd.nil?
+      if Promo::Promocode.where(code: code).first
         code = code+SecureRandom.hex(1)
       end
-
       code
     end
   end

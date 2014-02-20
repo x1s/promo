@@ -2,6 +2,7 @@ require "promo/version"
 
 require 'promo/promocode'
 require 'promo/history'
+require 'promo/usage'
 
 module Promo
 end

@@ -1,0 +1,8 @@
+promocode:
+  messages:
+    already_used: 'Promocode already used'
+    invalid: 'Invalid Promocode'
+    expired: 'This promocode has expired'
+    invalid_use: 'Invalid use of this promocode'
+    not_valid_for: 'This promocode is not valid for'
+    must_have_product: 'Product associated with this Promocode not found'

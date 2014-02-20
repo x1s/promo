@@ -1,96 +1,52 @@
 module Promo
   class Usage
+    class << self
+      # Validates the use of any promocode
+      # Options (Hash):
+      #  code: string with the code used
+      #  product_list: array with the products to be evaluated
+      def validate (options={})
+        promocode = Promo::Promocode.where(code: options[:code]).first
+        raise InvalidPromocode.new 'promocode.messages.invalid' if promocode.nil?
+        promocode.is_valid? options
+      end
 
-    def use (options={})
-      is_valid? options
+      # Calculates the discounts to any list of products
+      # Options (Hash):
+      #  promocode: Pomo::Promocode object
+      #  product_list: array with the products to be evaluated
+      def discount_for (options={})
+        return 0 if options[:promocode].nil?
+        promocode = options[:promocode]
+        product_list = options[:product_list]
 
-      self.used += 1
-      self.status = STATUS[:used] if self.quantity == self.used
-      self.used_at = Time.now
-      save
-      self
-    end
-
-    def discount_value_for (cart)
-
-      discount = 0.0
-
-      if self.product
-        # Then, check if the product is already in te cart
-        item = cart.find_item(self.product)
-
-        if !item.nil?
-          product = item.product
-          if self.is_percentage?
-            discount = (product.price.to_f * (self.value.to_f/100))
-            item.update_attribute(:discount_percent, self.value.to_f)
-          else
-            discount = self.value.to_f < product.price.to_f ? self.value.to_f : product.price.to_f
-          end
-          item.update_attribute(:discount_value, discount)
-        end
-
-      else
-        # cases when the promocode is not associated with a specific product
-        if self.product_type == 'Course'
-          item = cart.get_first_course
-          # it was created on a open giftcard (any product)
-
-          if !item.nil?
-            product = item.product
-            if self.is_percentage?
-              discount = (product.price.to_f * (self.value.to_f/100))
-              item.update_attribute(:discount_percent, self.value.to_f)
-            else
-              discount = self.value.to_f < product.price.to_f ? self.value.to_f : product.price.to_f
-            end
-          end
-        elsif self.product_type == 'CourseModule'
-          item = cart.get_first_module
-          # it was created on a open gitcard (aplied to any module)
-         if !item.nil?
-            product = item.product
-            if self.is_percentage?
-              discount = (product.price.to_f * (self.value.to_f/100))
-              item.update_attribute(:discount_percent, self.value.to_f)
-            else
-              discount = self.value.to_f < product.price.to_f ? self.value.to_f : product.price.to_f
-            end
-          end
+        return discount_for_product(options) if promocode.has_product?
+        if promocode.is_percentage?
+          calculate_percentage product_list.map(&:value).reduce(:+), promocode.value
         else
-          # Not associated with any product, apply it to the whole cart
-          if self.is_percentage?
-            discount = (cart.full_value(false) * (self.value.to_f/100))
-          else
-            discount = self.value.to_f
-          end
-
+          promocode.value
         end
       end
 
-      discount
-    end
-
-    def self.use_in_cart(cart)
-      promo = Promocode.find_by(id: cart.promocode.id)
-      promo.use ({ cart: cart })
-    end
-
-    def self.apply_cart(cart)
-      # retrieves the total value from a cart, without calculating promocodes
-      value_with_discounts = cart.full_value false
-
-      if !cart.promocode.blank?
-        promo = find_by(id: cart.promocode.id)
-        value_with_discounts -= promo.discount_value_for cart
+      # Calculates the dicount for a specific product in the list
+      # previously associated with the current promocode
+      # Parameters:
+      #  promocode: Pomo::Promocode object
+      #  product_list: array with the products to be evaluated
+      def discount_for_product promocode, product_list
+        product = promocode.product
+        return 0 unless product_list.include? product
+        if promocode.is_percentage?
+          calculate_percentage(product.value,promocode.value)
+        else
+          promocode.value
+        end
       end
 
-      if value_with_discounts.nil? || value_with_discounts < 0
-        value_with_discounts = 0
+      #calculates the percentage to a specific value
+      def calculate_percentage(value, percent)
+        (value * (percent.to_f/100)).to_i
       end
-
-      value_with_discounts.to_f
     end
-
   end
 end
