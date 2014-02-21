@@ -29,6 +29,7 @@ module Promo
     #  options.expires: 4.weeks
     #  options.code: SecureRandom.hex(4)
     #  options.product: Some model with has_many :promocodes, as: :product
+    #  options.product_type: Associate the promocode with a class of product (any product of that class)
     def self.generate(options={})
       options[:multiple] ||= false
       options[:quantity] ||= 1
@@ -100,32 +101,42 @@ module Promo
       true
     end
 
+
+    # Validates the use of this promocode
+    # Options:
+    #  product_list: Array with products, mandatory when the promocode is associated with
+    #                a specific product or a specific category of products
+    #    
     def is_valid?(options={})
       raise UsedPromocode.new 'promocode.messages.already_used' if self.status == STATUS[:used]
       raise InvalidPromocode.new 'promocode.messages.invalid' if self.status != STATUS[:valid]
       raise ExpiredPromocode.new 'promocode.messages.expired' if is_expired?
 
-      # Validating use with product associated
-      if !self.product.nil?
-        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:cart].nil?
-        if self.product && !options[:cart].has_product?(self.product)
+      # Validating use with a specific product associated
+      if self.has_product?
+        logger.debug "#------------ Promocode associated with a product"
+        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:product_list].nil?
+        if self.product && !options[:product_list].include?(self.product)
+          logger.debug "#--------------- Product associated not found on the list"
           raise InvalidPromoProduct.new 'promocode.messages.not_valid_for'
         end
       end
-      # Validating use with product associated
+
+      # Validating use with when a class of product is associated with the promocode
+      # not a specific product (no product_id defined)
       if self.product_id.nil? && !self.product_type.nil?
-        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:cart].nil?
-        if self.product_type == 'Course' && !options[:cart].get_first_course
+        logger.debug "#------------ Promocode associated with a class"
+        raise InvalidPromocode.new 'promocode.messages.invalid_use' if options[:product_list].nil?
+        if options[:product_list].none? { |p| p.class.to_s == self.product_type }
+          logger.debug "#--------------- Class associated not found on the list"
           raise InvalidPromoProduct.new 'promocode.messages.must_have_course'
-        end
-        if self.product_type == 'CourseModule' && !options[:cart].get_first_module
-          raise InvalidPromoProduct.new 'promocode.messages.must_have_module'
         end
       end
       # Returns the promocode if it's valid
       self
     end
 
+    # Generate random codes
     def self.generate_code(size=4,code="")
       code = SecureRandom.hex(size) if code.empty?
       code = code+SecureRandom.hex(size) unless code.empty?

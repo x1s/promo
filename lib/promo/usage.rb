@@ -20,7 +20,7 @@ module Promo
         promocode = options[:promocode]
         product_list = options[:product_list]
 
-        return discount_for_product(options) if promocode.has_product?
+        return discount_for_product(promocode, product_list) if promocode.has_product?
         if promocode.is_percentage?
           calculate_percentage product_list.map(&:value).reduce(:+), promocode.value
         else
