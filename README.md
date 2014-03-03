@@ -93,6 +93,13 @@ class Cart < ActiveRecord::Base
   end
 end
 ```
+### Rails View Helpers
+There is also a view helper:
+
+Show text status
+```ruby
+show_promo_status status
+```
 
 ### Example application
 I've created a sample application with a basic product/cart/order model to test the gem, and also might be used as base for any simple ecommerce:

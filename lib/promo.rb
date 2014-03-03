@@ -4,6 +4,9 @@ require 'promo/promocode'
 require 'promo/history'
 require 'promo/usage'
 
+# Load helpers in case of a rails application
+require 'promo/railtie' if defined?(Rails)
+
 module Promo
 end
 

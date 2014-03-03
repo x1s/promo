@@ -1,4 +1,8 @@
 module Promo
+
+  STATUS = { valid: 0, expired: 1, invalid: 2, used: 3}
+  TYPE = { percentage: 1, fixed_value: 0 }
+
   class Promocode < ActiveRecord::Base
     self.table_name = 'promo_promocodes'
     # Forbide direct creation of objects
@@ -12,13 +16,10 @@ module Promo
 
     validates :code, uniqueness: true
 
-    STATUS = { valid: 0, expired: 1, invalid: 2, used: 3}
-    TYPE = { percentage: 1, fixed_value: 0 }
-
-    scope :last, -> { where(status: STATUS[:valid]).order(id: :desc).limit(10) }
-    scope :used, -> { where(status: STATUS[:used]).order(used_at: :desc) }
-    scope :invalid, -> { where(status: STATUS[:invalid]).order(used_at: :desc) }
-    scope :expired, -> { where("status = ? OR expires < ?", STATUS[:expired], Time.now).order(expires: :desc) }
+    scope :last, -> { where(status: Promo::STATUS[:valid]).order(id: :desc).limit(10) }
+    scope :used, -> { where(status: Promo::STATUS[:used]).order(used_at: :desc) }
+    scope :invalid, -> { where(status: Promo::STATUS[:invalid]).order(used_at: :desc) }
+    scope :expired, -> { where("status = ? OR expires < ?", Promo::STATUS[:expired], Time.now).order(expires: :desc) }
 
     # Objects must always be created through generate method instead using new.
     # here you may define some options:
@@ -34,8 +35,8 @@ module Promo
       options[:multiple] ||= false
       options[:quantity] ||= 1
       options[:quantity] = 1 if options[:quantity].to_i <= 0
-      options[:promo_type] ||= TYPE[:percentage]
-      options[:status] ||= STATUS[:valid]
+      options[:promo_type] ||= Promo::TYPE[:percentage]
+      options[:status] ||= Promo::STATUS[:valid]
       options[:expires] ||= Time.now + 4.weeks
 
       if options[:code].blank?
@@ -70,14 +71,14 @@ module Promo
       is_valid? options
 
       self.used += 1
-      self.status = STATUS[:used] if self.quantity == self.used
+      self.status = Promo::STATUS[:used] if self.quantity == self.used
       self.used_at = Time.now
       save
       self
     end
 
     def invalidate!
-      update_attributes(status: STATUS[:invalid], used_at: Time.now)
+      update_attributes(status: Promo::STATUS[:invalid], used_at: Time.now)
     end
 
     #--------------------------
@@ -87,17 +88,17 @@ module Promo
     end
 
     def is_percentage?
-      self.promo_type == TYPE[:percentage]
+      self.promo_type == Promo::TYPE[:percentage]
     end
 
     def is_fixed_value?
-      self.promo_type == TYPE[:fixed_value]
+      self.promo_type == Promo::TYPE[:fixed_value]
     end
 
     def is_expired?
-      return true if self.status == STATUS[:expired]
+      return true if self.status == Promo::STATUS[:expired]
       return false if self.expires > Time.now
-      update_attribute(:status, STATUS[:expired])
+      update_attribute(:status, Promo::STATUS[:expired])
       true
     end
 
@@ -108,8 +109,8 @@ module Promo
     #                a specific product or a specific category of products
     #    
     def is_valid?(options={})
-      raise UsedPromocode.new 'promocode.messages.already_used' if self.status == STATUS[:used]
-      raise InvalidPromocode.new 'promocode.messages.invalid' if self.status != STATUS[:valid]
+      raise UsedPromocode.new 'promocode.messages.already_used' if self.status == Promo::STATUS[:used]
+      raise InvalidPromocode.new 'promocode.messages.invalid' if self.status != Promo::STATUS[:valid]
       raise ExpiredPromocode.new 'promocode.messages.expired' if is_expired?
 
       # Validating use with a specific product associated
